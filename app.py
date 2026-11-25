@@ -136,11 +136,12 @@ st.markdown(
 )
 
 MONTH_LABEL = dict(zip(df["月份"], df["月标签"]))
+MONTH_SHORT = {m: f"{int(m.split('-')[1])}月" if "-" in m else m for m in df["月份"].unique()}
 months_all = sorted(df["月份"].unique())
 
 c1, c2, c3, c4 = st.columns([1.1, 1.3, 1.6, 1.3])
 sel_months = c1.multiselect("月份", months_all, default=months_all,
-                            format_func=lambda x: MONTH_LABEL.get(x, x))
+                            format_func=lambda x: MONTH_SHORT.get(x, x))
 sel_doc = c2.multiselect("医生", sorted(df["医生"].unique()), default=[])
 sel_proj = c3.multiselect("项目", sorted(df["项目"].unique()), default=[],
                           format_func=lambda x: PROJECT_SHORT.get(x, x))
@@ -244,7 +245,7 @@ fig = go.Figure(go.Heatmap(
     hovertemplate="医生 %{y}<br>项目 %{x}<br>%{z:,.0f} 元<extra></extra>", xgap=2, ygap=2,
 ))
 fig.update_layout(height=430, margin=dict(l=110, r=40, t=30, b=90), plot_bgcolor="white",
-                  font=dict(size=13), xaxis=dict(tickangle=-20, title="项目（简称）"),
+                  font=dict(size=13), xaxis=dict(tickangle=-28, title="项目（简称）", tickfont=dict(size=11)),
                   yaxis=dict(title="医生", autorange="reversed"))
 st.plotly_chart(fig, width="stretch")
 st.caption("单元格为金额（元），「—」表示该医生未开此项目。")
@@ -277,8 +278,14 @@ if "开单科室" in d:
 # ---------- ⑥ 医生占比 ----------
 st.subheader("⑥ 医生金额占比")
 doc = d.groupby("医生")["金额"].sum().sort_values(ascending=False)
-fig = px.pie(values=doc.values, names=doc.index, hole=0.45, color_discrete_sequence=COLOR_SEQ)
-fig.update_traces(textinfo="percent", texttemplate="%{label}<br>%{percent}",
+dtot = doc.sum()
+keep = doc[doc / dtot >= 0.01]
+rest = doc[doc / dtot < 0.01]
+if len(rest) > 0:
+    keep = pd.concat([keep, pd.Series({f"其他（{len(rest)}人）": rest.sum()})])
+fig = px.pie(values=keep.values, names=keep.index, hole=0.45,
+             color_discrete_sequence=COLOR_SEQ[:len(keep)])
+fig.update_traces(textinfo="label+percent", texttemplate="%{label}<br>%{percent:.1%}",
                   textposition="outside", textfont_size=12,
                   hovertemplate="%{label}<br>%{value:,.0f} 元<extra></extra>")
 fig.update_layout(height=470, margin=dict(l=10, r=10, t=40, b=30), showlegend=False,
